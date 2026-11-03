@@ -259,7 +259,7 @@ inputEl.addEventListener('input', () => {
   renderPassage();
   updateStats();
 
-  if (charIndex >= currentPassage.length - 3) finishTest();
+  if (charIndex === currentPassage.length) finishTest();
 });
 
 function calculateWPM() {
