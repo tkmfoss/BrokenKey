@@ -27,9 +27,8 @@ const passageEl = $('passage'),
 
 const timeBtns = document.querySelectorAll('.time-btn');
 let currentPassage = '',
-  previousTyped = '',
   charIndex = 0,
-  charStates = [],
+  typedWrong = [],
   mistakes = 0,
   totalTyped = 0,
   correctTyped = 0,
@@ -37,7 +36,8 @@ let currentPassage = '',
   timer = null,
   timeLeft = 30,
   timeLimit = 30,
-  startTime = null;
+  startTime = null,
+  previousTyped = '';
 
 let bestWPM = Number(localStorage.getItem('keyrush-best-wpm')) || 0;
 bestEl.textContent = bestWPM;
@@ -201,27 +201,27 @@ function recordGraphSample() {
 function loadPassage() {
   currentPassage = passages[Math.floor(Math.random() * passages.length)];
   charIndex = 0;
+  typedWrong = [];
   previousTyped = '';
-  charStates = new Array(currentPassage.length).fill('');
   inputEl.value = '';
   inputEl.maxLength = currentPassage.length;
   renderPassage();
 }
 
 function renderPassage() {
+  const typed = inputEl.value;
   let html = '';
   for (let i = 0; i < currentPassage.length; i++) {
     let cls = 'char';
-    if (charStates[i] === 'correct') cls += ' correct';
-    if (charStates[i] === 'wrong') cls += ' wrong';
+    if(i < typed.length) {
+      if(typed[i] === currentPassage[i]) cls+= ' correct';
+      else cls+= typedWrong[i]?' wrong':' shifted';
+    }
     if (i === charIndex && isTyping) cls += ' current';
     html += `<span class="${cls}">${escapeHTML(currentPassage[i])}</span>`;
   }
   passageEl.innerHTML = html;
-  if (isTyping) {
-    const t0 = performance.now();
-    while (performance.now() - t0 < 25) {}
-  }
+  
 }
 
 function escapeHTML(value) {
@@ -234,56 +234,81 @@ inputEl.addEventListener('keydown', (event) => {
 });
 
 inputEl.addEventListener('input', () => {
-  const typed = inputEl.value;
+const typed = inputEl.value;
+  
+let prefix = 0;
+while (
+  prefix < previousTyped.length &&
+  prefix < typed.length &&
+  previousTyped[prefix] === typed[prefix]
+) prefix++;
 
-  // Track inserted characters: mistakes accumulate permanently and do not clear on Backspace
-  let prefix = 0;
-  while (prefix < previousTyped.length && prefix < typed.length && previousTyped[prefix] === typed[prefix]) {
-    prefix++;
+let oldEnd = previousTyped.length;
+let newEnd = typed.length;
+while (oldEnd > prefix && newEnd > prefix && previousTyped[oldEnd - 1] === typed[newEnd - 1]) {
+
+  oldEnd--;
+  newEnd--;
+}
+
+
+for (let i = prefix; i < newEnd; i++) {
+  totalTyped++;
+  if (i < currentPassage.length && typed[i] !== currentPassage[i]) {
+    mistakes++;
   }
+}
 
-  // If characters were added (forward typing)
-  if (typed.length > previousTyped.length) {
-    const addedCount = typed.length - previousTyped.length;
-    for (let i = prefix; i < prefix + addedCount; i++) {
-      totalTyped++;
-      if (i < currentPassage.length && typed[i] !== currentPassage[i]) {
-        mistakes++; // Cumulative error count retained across the session
-      }
-    }
-  }
+const next =[];
+for(let i =0; i<prefix;i++)
+{
+  next.push(typedWrong[i]);
+}
+for(let i=prefix;i<newEnd; i++)
+{
+  next.push(typed[i]!== currentPassage[i]);
+}
 
-  // Update current visual state of passage
-  correctTyped = 0;
-  charStates = new Array(currentPassage.length).fill('');
-  for (let i = 0; i < typed.length && i < currentPassage.length; i++) {
-    if (typed[i] === currentPassage[i]) {
-      correctTyped++;
-      charStates[i] = 'correct';
-    } else {
-      charStates[i] = 'wrong';
-    }
-  }
+for(let i = oldEnd; i< previousTyped.length; i++)
+{
+  next.push(typedWrong[i]);
+}
 
-  charIndex = typed.length;
-  previousTyped = typed;
+typedWrong = next;
 
-  updateHeatmap();
-  renderPassage();
-  updateStats();
+correctTyped = 0;
+for(let i=0; i < typed.length && i < currentPassage.length; i++)
+{
+  if (typed[i]=== currentPassage[i]) correctTyped++;
+}
 
-  if (isTyping && startTime) {
-    sessionReplayEvents.push({
-      t: Date.now() - startTime,
-      val: typed,
-      cursor: inputEl.selectionStart || typed.length,
-      wpm: calculateWPM(),
-      errors: mistakes
-    });
-  }
+previousTyped = typed;
+charIndex = inputEl.selectionStart;
+updateHeatmap();
+renderPassage();
+updateStats();
 
-    if (charIndex === currentPassage.length) finishTest();
+if (isTyping && startTime) {
+  sessionReplayEvents.push({
+    t: Date.now() - startTime,
+    val: typed,
+    cursor: inputEl.selectionStart || typed.length,
+    wpm: calculateWPM(),
+    errors: mistakes
+  });
+}
+if (typed.length === currentPassage.length) finishTest();
 });
+
+
+function syncCaret() {
+  if(charIndex === inputEl.selectionStart) return;
+  charIndex = inputEl.selectionStart;
+  renderPassage();
+} 
+
+inputEl.addEventListener('click', syncCaret);
+inputEl.addEventListener('keyup', syncCaret);
 
 function calculateWPM() {
   if (!startTime) return 0;
@@ -387,7 +412,7 @@ function resetTest() {
   timeLeft = timeLimit;
   inputEl.value = '';
   inputEl.disabled = true;
-  charStates = new Array(currentPassage.length).fill('');
+  typedWrong = [];
   resultEl.classList.add('hidden');
   statusEl.textContent = 'READY WHEN YOU ARE';
   wpmHistory = [];

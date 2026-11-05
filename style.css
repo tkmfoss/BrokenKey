@@ -360,6 +360,10 @@ body:has(.ghost-container) {
     background: rgba(255, 70, 70, 0.15);
 }
 
+.char.shifted {
+    color : #ffcd42;
+}
+
 /* Buttons */
 
 .ghost-container .btn-primary {
