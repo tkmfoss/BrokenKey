@@ -7,7 +7,11 @@ import {
   resolveExpectedKey,
   recordSubstitution,
   getTopSubstitution,
-  calculateRealWpm
+  calculateRealWpm,
+  countExpectedKeys,
+  buildCoachProfile,
+  getCoachWeaknesses,
+  generateCoachDrill
 } from './analytics.js';
 
 // Setup lightweight DOM environment for testing real browser event handlers in script.js
@@ -164,6 +168,39 @@ test('Real WPM calculation is accurate and handles edge cases', () => {
   assert.equal(calculateRealWpm(125, 30), 50);
   assert.equal(calculateRealWpm(0, 30), 0);
   assert.equal(calculateRealWpm(100, 0), 0);
+});
+
+test('Adaptive coach aggregates sessions and ranks weaknesses by error rate', () => {
+  const observedCounts = countExpectedKeys('red error', 'red error');
+  const profile = buildCoachProfile([
+    {
+      observedCounts,
+      keyMistakes: { E: 2, R: 1 },
+      keySubstitutions: { E: { R: 2 } }
+    },
+    {
+      observedCounts: { E: 4, R: 4 },
+      keyMistakes: { E: 1 },
+      keySubstitutions: { E: { W: 1 } }
+    }
+  ]);
+
+  const weaknesses = getCoachWeaknesses(profile);
+  assert.equal(profile.E.attempts, 6);
+  assert.equal(profile.E.mistakes, 3);
+  assert.deepEqual(weaknesses[0].topSubstitution, { pressedKey: 'R', count: 2 });
+  assert.equal(weaknesses[0].key, 'E');
+});
+
+test('Adaptive coach generates focused drills and falls back to valid passage words', () => {
+  const drill = generateCoachDrill(
+    ['red error', 'quick brown fox'],
+    [{ key: 'E', attempts: 4, mistakes: 2, errorRate: 0.5 }],
+    10
+  );
+
+  assert.ok(drill.split(' ').length >= 10);
+  assert.match(drill, /e/i);
 });
 
 // -------------------------------------------------------------

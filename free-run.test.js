@@ -306,4 +306,125 @@ describe('Production Free Run Mode (Issue #41)', () => {
     const summary = prod.getLastResultSummary();
     assert.ok(summary.includes('(Clean run)'), 'Zero mistakes must include "(Clean run)" tag');
   });
+
+  test('Adaptive Coach: completed runs persist a session profile for future drills', () => {
+    prod.setTimeLimit(0);
+    prod.resetTest();
+    prod.setTestPassage('Coach persistence test.');
+    prod.setTestTyping(true);
+    prod.setStartTime(Date.now() - 5000);
+
+    prod.finishTest();
+
+    const sessions = prod.getCoachSessions();
+    assert.equal(sessions.length, 1);
+    assert.ok(sessions[0].observedCounts);
+    assert.ok(sessions[0].keyMistakes);
+  });
+
+  test('Adaptive Coach: reset clears coach history without clearing personal best', () => {
+    prod.setTimeLimit(0);
+    prod.resetTest();
+    prod.setTestPassage('Coach reset test.');
+    prod.setTestTyping(true);
+    prod.setStartTime(Date.now() - 5000);
+    prod.finishTest();
+
+    globalThis.localStorage.setItem('keyrush-best-wpm', '88');
+    prod.resetCoachHistory();
+
+    assert.equal(prod.getCoachSessions().length, 0);
+    assert.equal(globalThis.localStorage.getItem('keyrush-best-wpm'), '88');
+  });
+
+  test('Adaptive Coach: a clean targeted drill resolves its focused key', () => {
+    const resolved = prod.getResolvedCoachKeys([
+      {
+        isCoachDrill: true,
+        coachFocusKeys: ['U'],
+        observedCounts: { U: 1 },
+        keyMistakes: {}
+      }
+    ]);
+
+    assert.equal(resolved.has('U'), true);
+  });
+
+  test('Adaptive Coach: a clean normal run updates a previously weak key', () => {
+    const resolved = prod.getResolvedCoachKeys([
+      {
+        isCoachDrill: false,
+        observedCounts: { U: 5 },
+        keyMistakes: {}
+      }
+    ]);
+
+    assert.equal(resolved.has('U'), true);
+  });
+
+  test('Adaptive Coach: latest normal-run weakness takes priority over an older tie', () => {
+    const profile = prod.buildCoachProfile([
+      { observedCounts: { U: 5 }, keyMistakes: { U: 5 }, keySubstitutions: {} },
+      { observedCounts: { O: 5 }, keyMistakes: { O: 5 }, keySubstitutions: {} }
+    ]);
+    const weaknesses = prod.getCoachWeaknesses(profile);
+
+    assert.equal(weaknesses[0].key, 'O');
+  });
+
+  test('Adaptive Coach: current focus shows the latest substitution', () => {
+    const profile = prod.buildCoachProfile([
+      { observedCounts: { A: 5 }, keyMistakes: { A: 1 }, keySubstitutions: { A: { Z: 1 } } },
+      { observedCounts: { A: 5 }, keyMistakes: { A: 1 }, keySubstitutions: { A: { O: 1 } } }
+    ]);
+    const weaknesses = prod.getCoachWeaknesses(profile);
+
+    assert.equal(weaknesses[0].key, 'A');
+    assert.equal(weaknesses[0].topSubstitution.pressedKey, 'O');
+  });
+
+  test('Adaptive Coach: current focus matches the highest displayed error rate', () => {
+    const profile = prod.buildCoachProfile([
+      { observedCounts: { B: 14, S: 10 }, keyMistakes: { B: 1, S: 1 }, keySubstitutions: { B: { SPACE: 1 } } }
+    ]);
+    const weaknesses = prod.getCoachWeaknesses(profile);
+
+    assert.equal(weaknesses[0].key, 'S');
+  });
+
+
+  test('Adaptive Coach: before-and-after result reports improvement', () => {
+    const result = prod.calculateCoachResult(
+      { U: { attempts: 10, mistakes: 4 } },
+      { U: 5 },
+      { U: 0 },
+      ['U']
+    );
+
+    assert.equal(result.beforeErrorRate, 0.4);
+    assert.equal(result.afterErrorRate, 0);
+    assert.equal(result.status, 'IMPROVING');
+  });
+
+  test('Adaptive Coach: latest normal session produces visible training feedback', () => {
+    const feedback = prod.formatCoachSession({
+      observedCounts: { E: 5, R: 3 },
+      keyMistakes: { E: 1 }
+    });
+
+    assert.equal(feedback, 'LAST TEST · 1 ERROR · 8 KEY ATTEMPTS OBSERVED');
+  });
+
+  test('Next passage: selecting a new passage excludes the current passage', () => {
+    const originalRandom = Math.random;
+    Math.random = () => 0;
+
+    try {
+      prod.setTestPassage('The quick brown fox');
+      const nextPassage = prod.getNextPassage(true);
+      assert.notEqual(nextPassage, 'The quick brown fox');
+    } finally {
+      Math.random = originalRandom;
+    }
+  });
 });

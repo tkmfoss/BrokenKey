@@ -66,6 +66,7 @@
           <button id="wpm-graph-btn" class="feature-btn" type="button">⌁ Live WPM graph <span class="soon">NEW</span></button>
           <button id="ghost-btn" class="ghost-btn" type="button">◉ Race a ghost <span class="soon">BETA</span></button>
           <button id="custom-passage-btn" class="feature-btn custom-feature-btn" type="button">✏ Custom passage <span class="soon">STUDIO</span></button>
+          <button id="coach-btn" class="feature-btn coach-feature-btn" type="button">⌁ Training coach <span class="soon">ADAPTIVE</span></button>
         </div>
       </div>
       <div id="passage" class="passage" aria-label="Text to type"></div>
@@ -110,6 +111,36 @@
           </div>
         </div>
         <div id="keyboard-layout" class="keyboard-layout" aria-label="Visual keyboard error distribution"></div>
+      </div>
+
+      <div id="coach-card" class="analytics-card coach-card">
+        <div class="card-header">
+          <div class="card-title-group">
+            <h3>Training Signal</h3>
+            <span class="badge coach-badge">ADAPTIVE</span>
+          </div>
+          <div class="coach-header-actions">
+            <span id="coach-session-count" class="card-subtitle">0 SESSIONS LOGGED</span>
+            <button id="reset-coach-btn" class="coach-reset-btn" type="button" title="Clear training coach history">Reset coach</button>
+          </div>
+        </div>
+        <div class="coach-grid">
+          <div class="coach-summary-block">
+            <span class="coach-kicker">CURRENT FOCUS</span>
+            <strong id="coach-focus">Complete a round to calibrate.</strong>
+            <p id="coach-summary">Your repeated errors will become a focused practice drill.</p>
+            <p id="coach-progress" class="coach-progress" aria-live="polite">No focused drill measured yet.</p>
+            <div id="coach-weak-keys" class="coach-weak-keys" aria-label="Current weak keys"></div>
+          </div>
+          <div class="coach-drill-block">
+            <div class="coach-drill-heading">
+              <span class="coach-kicker">NEXT DRILL</span>
+              <span id="coach-drill-level" class="coach-level">CALIBRATION</span>
+            </div>
+            <p id="coach-drill" class="coach-drill">Run a test to generate your first targeted drill.</p>
+            <button id="start-coach-btn" class="btn btn-primary" type="button" disabled>Start focused drill</button>
+          </div>
+        </div>
       </div>
     </section>
     <div class="bottom-chaos"><span class="tiny-sticker">DEBUG THE EXPERIENCE</span><span>STATUS: MOSTLY OPERATIONAL*</span><span>* RESULTS MAY BE QUESTIONABLE</span></div>

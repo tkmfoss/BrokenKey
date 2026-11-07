@@ -26,7 +26,18 @@ const passageEl = $('passage'),
   themeBtn = $('theme-btn'),
   ghostBtn = $('ghost-btn'),
   chartCanvas = $('wpm-chart'),
-  keyboardEl = $('keyboard-layout');
+  keyboardEl = $('keyboard-layout'),
+  coachBtn = $('coach-btn'),
+  coachCard = $('coach-card'),
+  coachSessionCountEl = $('coach-session-count'),
+  coachFocusEl = $('coach-focus'),
+  coachSummaryEl = $('coach-summary'),
+  coachWeakKeysEl = $('coach-weak-keys'),
+  coachDrillEl = $('coach-drill'),
+  coachDrillLevelEl = $('coach-drill-level'),
+  coachProgressEl = $('coach-progress'),
+  startCoachBtn = $('start-coach-btn'),
+  resetCoachBtn = $('reset-coach-btn');
 
 const timeBtns = isBrowser ? document.querySelectorAll('.time-btn') : [];
 let currentPassage = '',
@@ -105,6 +116,270 @@ function getTopSubstitution(expectedKey) {
   if (entries.length === 0) return null;
   entries.sort((a, b) => b[1] - a[1]);
   return { pressedKey: entries[0][0], count: entries[0][1] };
+}
+
+const COACH_STORAGE_KEY = 'keyrush-coach-sessions-v1';
+let coachDrillText = '';
+let activeCoachDrill = null;
+let coachDrillActive = false;
+
+function readCoachSessions() {
+  if (typeof localStorage === 'undefined') return [];
+  try {
+    const stored = JSON.parse(localStorage.getItem(COACH_STORAGE_KEY) || '[]');
+    return Array.isArray(stored) ? stored : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeCoachSession(session) {
+  if (typeof localStorage === 'undefined') return;
+  const sessions = readCoachSessions();
+  sessions.push(session);
+  localStorage.setItem(COACH_STORAGE_KEY, JSON.stringify(sessions.slice(-20)));
+}
+
+function resetCoachHistory() {
+  if (typeof localStorage !== 'undefined') {
+    localStorage.removeItem(COACH_STORAGE_KEY);
+  }
+  coachDrillText = '';
+  updateCoachCard();
+}
+
+function countExpectedKeys(passage, typedText) {
+  const counts = {};
+  const observedText = String(typedText || '');
+  for (let index = 0; index < observedText.length && index < passage.length; index++) {
+    const key = resolveExpectedKey(passage[index]);
+    if (key) counts[key] = (counts[key] || 0) + 1;
+  }
+  return counts;
+}
+
+function buildCoachProfile(sessions) {
+  const profile = {};
+  (Array.isArray(sessions) ? sessions : []).forEach((session) => {
+    const observedCounts = session.observedCounts || {};
+    const mistakesForSession = session.keyMistakes || {};
+    const substitutionsForSession = session.keySubstitutions || {};
+
+    Object.values(profile).forEach((data) => {
+      data.recentAttempts = 0;
+      data.recentMistakes = 0;
+      data.recentSubstitutions = {};
+    });
+
+    Object.entries(observedCounts).forEach(([key, count]) => {
+      if (!profile[key]) profile[key] = { attempts: 0, mistakes: 0, substitutions: {}, recentAttempts: 0, recentMistakes: 0, recentSubstitutions: {} };
+      profile[key].attempts += Number(count) || 0;
+      profile[key].recentAttempts = Number(count) || 0;
+      profile[key].recentMistakes = Number(mistakesForSession[key]) || 0;
+    });
+    Object.entries(mistakesForSession).forEach(([key, count]) => {
+      if (!profile[key]) profile[key] = { attempts: 0, mistakes: 0, substitutions: {}, recentAttempts: 0, recentMistakes: 0, recentSubstitutions: {} };
+      profile[key].mistakes += Number(count) || 0;
+      profile[key].recentMistakes = Number(count) || 0;
+    });
+    Object.entries(substitutionsForSession).forEach(([expectedKey, pressedKeys]) => {
+      if (!profile[expectedKey]) profile[expectedKey] = { attempts: 0, mistakes: 0, substitutions: {}, recentAttempts: 0, recentMistakes: 0, recentSubstitutions: {} };
+      Object.entries(pressedKeys || {}).forEach(([pressedKey, count]) => {
+        profile[expectedKey].substitutions[pressedKey] =
+          (profile[expectedKey].substitutions[pressedKey] || 0) + (Number(count) || 0);
+        profile[expectedKey].recentSubstitutions[pressedKey] =
+          (profile[expectedKey].recentSubstitutions[pressedKey] || 0) + (Number(count) || 0);
+      });
+    });
+  });
+  return profile;
+}
+
+function getCoachWeaknesses(profile) {
+  return Object.entries(profile || [])
+    .map(([key, data]) => {
+      const attempts = Number(data.attempts) || 0;
+      const mistakesForKey = Number(data.mistakes) || 0;
+      const substitutions = Object.entries(data.substitutions || {})
+        .sort((a, b) => b[1] - a[1]);
+      const recentSubstitutions = Object.entries(data.recentSubstitutions || {})
+        .sort((a, b) => b[1] - a[1]);
+      return {
+        key,
+        attempts,
+        mistakes: mistakesForKey,
+        errorRate: attempts ? mistakesForKey / attempts : 0,
+        recentErrorRate: data.recentAttempts ? data.recentMistakes / data.recentAttempts : 0,
+        topSubstitution: (recentSubstitutions[0] || substitutions[0])
+          ? {
+              pressedKey: (recentSubstitutions[0] || substitutions[0])[0],
+              count: (recentSubstitutions[0] || substitutions[0])[1]
+            }
+          : null
+      };
+    })
+    .filter((item) => item.attempts >= 5 && item.mistakes > 0)
+    .sort((a, b) => {
+      return b.errorRate - a.errorRate || b.recentErrorRate - a.recentErrorRate || b.mistakes - a.mistakes;
+    });
+}
+
+function getResolvedCoachKeys(sessions) {
+  const latest = Array.isArray(sessions) ? sessions[sessions.length - 1] : null;
+  if (!latest || !latest.observedCounts) return new Set();
+  const candidateKeys = latest.isCoachDrill && Array.isArray(latest.coachFocusKeys)
+    ? latest.coachFocusKeys
+    : Object.keys(latest.observedCounts);
+  const minimumObserved = latest.isCoachDrill ? 1 : 5;
+
+  return new Set(candidateKeys.filter((key) => {
+    const observed = Number((latest.observedCounts || {})[key]) || 0;
+    const mistakesForKey = Number((latest.keyMistakes || {})[key]) || 0;
+    return observed >= minimumObserved && mistakesForKey === 0;
+  }));
+}
+
+function getCurrentCoachWeaknesses(sessions) {
+  const resolvedKeys = getResolvedCoachKeys(sessions);
+  return getCoachWeaknesses(buildCoachProfile(sessions))
+    .filter((item) => !resolvedKeys.has(item.key));
+}
+
+function getCoachBaseline(profile, focusKeys) {
+  return (focusKeys || []).reduce((baseline, key) => {
+    const data = profile[key] || {};
+    baseline[key] = {
+      attempts: Number(data.attempts) || 0,
+      mistakes: Number(data.mistakes) || 0
+    };
+    return baseline;
+  }, {});
+}
+
+function calculateCoachResult(baseline, observedCounts, mistakes, focusKeys) {
+  const before = (focusKeys || []).reduce((totals, key) => {
+    totals.attempts += Number((baseline || {})[key]?.attempts) || 0;
+    totals.mistakes += Number((baseline || {})[key]?.mistakes) || 0;
+    return totals;
+  }, { attempts: 0, mistakes: 0 });
+  const after = (focusKeys || []).reduce((totals, key) => {
+    totals.attempts += Number((observedCounts || {})[key]) || 0;
+    totals.mistakes += Number((mistakes || {})[key]) || 0;
+    return totals;
+  }, { attempts: 0, mistakes: 0 });
+  const beforeErrorRate = before.attempts ? before.mistakes / before.attempts : 0;
+  const afterErrorRate = after.attempts ? after.mistakes / after.attempts : 0;
+  const improvement = beforeErrorRate - afterErrorRate;
+
+  return {
+    focusKeys,
+    beforeAttempts: before.attempts,
+    beforeMistakes: before.mistakes,
+    beforeErrorRate,
+    afterAttempts: after.attempts,
+    afterMistakes: after.mistakes,
+    afterErrorRate,
+    improvement,
+    status: improvement > 0.01 ? 'IMPROVING' : improvement < -0.01 ? 'NEEDS WORK' : 'HOLDING'
+  };
+}
+
+function formatCoachResult(result) {
+  if (!result || !result.afterAttempts) return 'No focused drill measured yet.';
+  return `LAST DRILL · ${Math.round(result.beforeErrorRate * 100)}% → ${Math.round(result.afterErrorRate * 100)}% ERROR RATE · ${result.status}`;
+}
+
+function formatCoachSession(session) {
+  if (!session) return 'No training session recorded yet.';
+  if (session.coachResult) return formatCoachResult(session.coachResult);
+  const attempts = Object.values(session.observedCounts || {})
+    .reduce((total, count) => total + (Number(count) || 0), 0);
+  const errors = Object.values(session.keyMistakes || {})
+    .reduce((total, count) => total + (Number(count) || 0), 0);
+  return `LAST TEST · ${errors} ERROR${errors === 1 ? '' : 'S'} · ${attempts} KEY ATTEMPTS OBSERVED`;
+}
+
+function generateCoachDrill(weaknesses, targetWords = 18) {
+  const weakKeys = new Set((weaknesses || []).slice(0, 5).map((item) => item.key));
+  const sourceWords = passages.flatMap((passage) => passage.match(/[^\s]+/g) || []);
+  const focusedWords = sourceWords
+    .map((word, index) => ({
+      word,
+      index,
+      score: [...word.toUpperCase()].reduce((total, character) => total + (weakKeys.has(character) ? 1 : 0), 0)
+    }))
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .map((item) => item.word);
+  const candidates = [...new Set([...focusedWords, ...sourceWords])];
+  const selected = [];
+  const requestedWords = Math.max(10, targetWords);
+  for (let index = 0; index < requestedWords && candidates.length > 0; index++) {
+    selected.push(candidates[index % candidates.length]);
+  }
+  return selected.join(' ');
+}
+
+function getCoachDrillPlan(weaknesses) {
+  const top = weaknesses && weaknesses[0];
+  if (!top || top.errorRate >= 0.35) return { words: 12, label: 'RECOVERY' };
+  if (top.errorRate >= 0.15) return { words: 18, label: 'FOCUS' };
+  return { words: 24, label: 'STRETCH' };
+}
+
+function updateCoachCard() {
+  if (!coachCard) return;
+  const sessions = readCoachSessions();
+  const weaknesses = getCurrentCoachWeaknesses(sessions);
+  const top = weaknesses[0];
+  coachSessionCountEl.textContent = `${sessions.length} SESSION${sessions.length === 1 ? '' : 'S'} LOGGED`;
+  coachProgressEl.textContent = formatCoachSession(sessions[sessions.length - 1]);
+
+  if (!top) {
+    coachFocusEl.textContent = sessions.length ? 'No repeat weakness yet.' : 'Complete a round to calibrate.';
+    coachSummaryEl.textContent = sessions.length
+      ? 'Keep typing. The coach needs a repeated pattern before it assigns a drill.'
+      : 'Your repeated errors will become a focused practice drill.';
+    coachWeakKeysEl.innerHTML = '';
+    coachDrillEl.textContent = 'Run another test to generate your first targeted drill.';
+    coachDrillLevelEl.textContent = sessions.length ? 'BUILDING SIGNAL' : 'CALIBRATION';
+    startCoachBtn.disabled = true;
+    coachDrillText = '';
+    return;
+  }
+
+  const drillPlan = getCoachDrillPlan(weaknesses);
+  const drill = generateCoachDrill(weaknesses, drillPlan.words);
+  const substitutionText = top.topSubstitution
+    ? ` often confused with ${top.topSubstitution.pressedKey}`
+    : '';
+  coachFocusEl.textContent = `${top.key}${substitutionText}`;
+  coachSummaryEl.textContent = `${Math.round(top.errorRate * 100)}% error rate across ${top.attempts} observed attempts.`;
+  coachWeakKeysEl.innerHTML = weaknesses.slice(0, 4)
+    .map((item) => `<span class="coach-key-chip">${escapeHTML(item.key)} ${Math.round(item.errorRate * 100)}%</span>`)
+    .join('');
+  coachDrillEl.textContent = drill;
+  coachDrillLevelEl.textContent = drillPlan.label;
+  startCoachBtn.disabled = false;
+  coachDrillText = drill;
+}
+
+function recordCoachSession() {
+  const observedCounts = countExpectedKeys(currentPassage, inputEl ? inputEl.value : '');
+  const coachResult = activeCoachDrill
+    ? calculateCoachResult(activeCoachDrill.baseline, observedCounts, keyMistakes, activeCoachDrill.focusKeys)
+    : null;
+  writeCoachSession({
+    timestamp: Date.now(),
+    observedCounts,
+    keyMistakes,
+    keySubstitutions,
+    isCoachDrill: Boolean(activeCoachDrill),
+    coachFocusKeys: activeCoachDrill ? activeCoachDrill.focusKeys : [],
+    coachResult
+  });
+  activeCoachDrill = null;
+  updateCoachCard();
 }
 
 const KEYBOARD_ROWS = [
@@ -277,11 +552,18 @@ function recordGraphSample() {
 let isCustomPassage = false;
 let customPassageText = '';
 
-function loadPassage() {
+function getNextPassage(avoidCurrent = false) {
+  const availablePassages = avoidCurrent && passages.length > 1
+    ? passages.filter((passage) => passage !== currentPassage)
+    : passages;
+  return availablePassages[Math.floor(Math.random() * availablePassages.length)];
+}
+
+function loadPassage(avoidCurrent = false) {
   if (isCustomPassage && customPassageText) {
     currentPassage = customPassageText;
   } else {
-    currentPassage = passages[Math.floor(Math.random() * passages.length)];
+    currentPassage = getNextPassage(avoidCurrent);
   }
   charIndex = 0;
   charStates = new Array(currentPassage.length).fill('');
@@ -546,6 +828,8 @@ function finishTest() {
     localStorage.setItem('keyrush-best-accuracy', finalAccuracy);
   }
 
+  recordCoachSession();
+
   const worstKeys = Object.entries(keyMistakes)
     .filter(([k, cnt]) => cnt > 0 && k !== 'SPACE')
     .sort((a, b) => b[1] - a[1])
@@ -636,6 +920,38 @@ if (startBtn) {
   });
 }
 
+if (coachBtn) {
+  coachBtn.addEventListener('click', () => {
+    if (coachCard) coachCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  });
+}
+
+if (resetCoachBtn) {
+  resetCoachBtn.addEventListener('click', () => {
+    activeCoachDrill = null;
+    coachDrillActive = false;
+    resetCoachHistory();
+  });
+}
+
+if (startCoachBtn) {
+  startCoachBtn.addEventListener('click', () => {
+    if (!coachDrillText || isTyping) return;
+    const sessions = readCoachSessions();
+    const profile = buildCoachProfile(sessions);
+    const weaknesses = getCurrentCoachWeaknesses(sessions);
+    const focusKeys = weaknesses.slice(0, 5).map((item) => item.key);
+    activeCoachDrill = { focusKeys, baseline: getCoachBaseline(profile, focusKeys) };
+    coachDrillActive = true;
+    isCustomPassage = true;
+    customPassageText = coachDrillText;
+    if (customActiveTag) customActiveTag.classList.remove('hidden');
+    resetTest();
+    loadPassage();
+    if (passageEl) passageEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  });
+}
+
 if (stopBtn) {
   stopBtn.addEventListener('click', () => {
     if (!isTyping) return;
@@ -650,8 +966,15 @@ if (stopBtn) {
 if (resetBtn) resetBtn.addEventListener('click', resetTest);
 if (nextBtn) {
   nextBtn.addEventListener('click', () => {
+    if (coachDrillActive) {
+      coachDrillActive = false;
+      activeCoachDrill = null;
+      isCustomPassage = false;
+      customPassageText = '';
+      if (customActiveTag) customActiveTag.classList.add('hidden');
+    }
     resetTest();
-    loadPassage();
+    loadPassage(true);
   });
 }
 
@@ -690,6 +1013,7 @@ if (isBrowser) {
   initGraph();
   loadPassage();
   updateStats();
+  updateCoachCard();
 }
 
 // Decorative WASD interaction: hover and press feedback, separate from typing-test state.
@@ -1768,6 +2092,17 @@ if (typeof module !== 'undefined' && module.exports) {
     setTestCorrectTyped: (v) => { correctTyped = v; },
     setTestMistakes: (v) => { mistakes = v; },
     getLastResultSummary: () => lastResultSummary,
+    getCoachSessions: readCoachSessions,
+    resetCoachHistory,
+    getResolvedCoachKeys,
+    buildCoachProfile,
+    getCoachWeaknesses,
+    generateCoachDrill,
+    getCoachDrillPlan,
+    getCoachBaseline,
+    calculateCoachResult,
+    formatCoachSession,
+    getNextPassage,
     SoundEngine,
     soundEngine,
     sanitizeCustomPassage,
