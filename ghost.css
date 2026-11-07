@@ -23,7 +23,7 @@ body.ghost-page.light-mode {
   --accent: #547600;
   --accent-ink: #fff;
   --psg2: #fff;
-  --correct: #167b50;
+  --correct: #547600 /*#167b50*/;
   --wrong: #c62f48;
   --shadow: 7px 7px 0 var(--accent);
   --grid: rgba(40, 60, 10, 0.06);
