@@ -1,10 +1,10 @@
 const isBrowser = typeof window !== 'undefined' && typeof document !== 'undefined';
 // KeyRush — Modern Typing Speed Test & Performance Analytics.
 const passages = [
-  "The quick brown fox jumps over the lazy dog. Pack my box with five dozen liquor jugs. How vexingly quick daft zebras jump!",
-  "Programming is the art of telling another human what one wants the computer to do.\n\nGood code reads like a good story, and every bug you fix makes the next chapter easier to write.",
-  "In the middle of difficulty lies opportunity. Stay curious, keep building, and never stop learning new things every single day.\n\nSmall experiments can reveal surprising answers. Take your time, observe the result, and try again.",
-  "Technology is best when it brings people together.\n\nSimple things should be simple, complex things should be possible, and every mistake is just a lesson wearing a disguise."
+  "The quick brown  fox jumps over the lazy dog. Pack my box with five dozen liquor jugs. How vexingly quick daft zebras jump!",
+  "Programming is  the art of telling another human what one wants the computer to do.\n\nGood code reads like a good story, and every bug you fix makes the next chapter easier to write.",
+  "In the middle  of difficulty lies opportunity. Stay curious, keep building, and never stop learning new things every single day.\n\nSmall experiments can reveal surprising answers. Take your time, observe the result, and try again.",
+  "Technology  is best when it brings people together.\n\nSimple things should be simple, complex things should be possible, and every mistake is just a lesson wearing a disguise."
 ];
 
 const $ = (id) => (isBrowser ? document.getElementById(id) : null);
@@ -310,15 +310,38 @@ function escapeHTML(value) {
 
 let isPasting = false;
 let pasteResetTimeout = null;
+let disqualified = false;
 
-function handlePaste() {
+function showPasteWarning(message = 'Pasting does not count — type the passage manually.') {
+  if (resultEl) {
+    resultEl.classList.remove('hidden');
+    resultEl.textContent = message;
+    resultEl.style.borderColor = '#ff5a72';
+    resultEl.style.color = '#ff5a72';
+    resultEl.style.background = '#ff5a7220';
+  }
+  if (statusEl) statusEl.textContent = 'DISQUALIFIED';
+}
+
+function handlePaste(event) {
+  if (event) event.preventDefault();
   isPasting = true;
+  disqualified = true;
   clearTimeout(pasteResetTimeout);
   pasteResetTimeout = setTimeout(() => {
     isPasting = false;
   }, 100);
+  showPasteWarning();
 }
 
+function handleBeforeInput(event) {
+  if (event.inputType === 'insertFromPaste' || event.inputType === 'insertReplacementText') {
+    isPasting = true;
+    disqualified = true;
+    event.preventDefault();
+    showPasteWarning();
+  }
+}
 function handleKeyDown(event) {
   // Allow default Backspace behavior so users can correct typos (coordinates with PR #36)
   if (event.key === 'Backspace') {
@@ -434,6 +457,7 @@ function handleInput(event) {
 
 if (inputEl) {
   inputEl.addEventListener('paste', handlePaste);
+  inputEl.addEventListener('beforeinput', handleBeforeInput);
   inputEl.addEventListener('keydown', handleKeyDown);
   inputEl.addEventListener('input', handleInput);
   inputEl.addEventListener('focus', () => {
@@ -530,8 +554,6 @@ function finishTest() {
   if (replayBtn) replayBtn.classList.add('hidden');
   if (typeof closeReplayModal === 'function') closeReplayModal();
 
-  statusEl.textContent = 'TEST COMPLETE';
-
   renderPassage();
   updateHeatmap();
   updateStats();
@@ -539,42 +561,58 @@ function finishTest() {
   const finalWPM = calculateWPM();
   const finalAccuracy = calculateAccuracy();
 
-  if (finalWPM > bestWPM) {
-    bestWPM = finalWPM;
-
-    localStorage.setItem('keyrush-best-wpm', bestWPM);
-    localStorage.setItem('keyrush-best-accuracy', finalAccuracy);
-  }
-
-  const worstKeys = Object.entries(keyMistakes)
-    .filter(([k, cnt]) => cnt > 0 && k !== 'SPACE')
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 3);
-
-  let breakdownStr = '';
-  if (worstKeys.length > 0) {
-    const details = worstKeys.map(([k, cnt]) => {
-      const topSub = getTopSubstitution(k);
-      return topSub ? `${k} (${cnt}x, confused with ${topSub.pressedKey})` : `${k} (${cnt}x)`;
-    });
-    breakdownStr = ` · Weak keys: ${details.join(', ')}`;
-  }
-
-  lastResultSummary = '';
-  const elapsedSecStr = startTime ? ((Date.now() - startTime) / 1000).toFixed(1) : timeLeft;
-  const errorLabel = mistakes === 1 ? 'error' : 'errors';
-  const cleanTag = mistakes === 0 ? ' (Clean run)' : '';
-  if (timeLimit === 0) {
-    lastResultSummary =
-      `Completed in ${elapsedSecStr}s · ${finalWPM} WPM · ${mistakes} ${errorLabel}${cleanTag}${breakdownStr}`;
+  if (disqualified) {
+    lastResultSummary = 'Pasting does not count — this run is disqualified.';
+    if (statusEl) statusEl.textContent = 'DISQUALIFIED';
+    if (resultEl) {
+      resultEl.classList.remove('hidden');
+      resultEl.textContent = lastResultSummary;
+      resultEl.style.borderColor = '#ff5a72';
+      resultEl.style.color = '#ff5a72';
+      resultEl.style.background = '#ff5a7220';
+    }
   } else {
-    lastResultSummary =
-      `Test complete · ${finalWPM} WPM · ${mistakes} ${errorLabel}${cleanTag}${breakdownStr}`;
-  }
+    statusEl.textContent = 'TEST COMPLETE';
 
-  if (resultEl) {
-    resultEl.classList.remove('hidden');
-    resultEl.textContent = lastResultSummary;
+    if (finalWPM > bestWPM) {
+      bestWPM = finalWPM;
+      localStorage.setItem('keyrush-best-wpm', bestWPM);
+      localStorage.setItem('keyrush-best-accuracy', finalAccuracy);
+    }
+
+    const worstKeys = Object.entries(keyMistakes)
+      .filter(([k, cnt]) => cnt > 0 && k !== 'SPACE')
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3);
+
+    let breakdownStr = '';
+    if (worstKeys.length > 0) {
+      const details = worstKeys.map(([k, cnt]) => {
+        const topSub = getTopSubstitution(k);
+        return topSub ? `${k} (${cnt}x, confused with ${topSub.pressedKey})` : `${k} (${cnt}x)`;
+      });
+      breakdownStr = ` · Weak keys: ${details.join(', ')}`;
+    }
+
+    lastResultSummary = '';
+    const elapsedSecStr = startTime ? ((Date.now() - startTime) / 1000).toFixed(1) : timeLeft;
+    const errorLabel = mistakes === 1 ? 'error' : 'errors';
+    const cleanTag = mistakes === 0 ? ' (Clean run)' : '';
+    if (timeLimit === 0) {
+      lastResultSummary =
+        `Completed in ${elapsedSecStr}s · ${finalWPM} WPM · ${mistakes} ${errorLabel}${cleanTag}${breakdownStr}`;
+    } else {
+      lastResultSummary =
+        `Test complete · ${finalWPM} WPM · ${mistakes} ${errorLabel}${cleanTag}${breakdownStr}`;
+    }
+
+    if (resultEl) {
+      resultEl.classList.remove('hidden');
+      resultEl.textContent = lastResultSummary;
+      resultEl.style.borderColor = '';
+      resultEl.style.color = '';
+      resultEl.style.background = '';
+    }
   }
 
   if (startTime) {
@@ -596,11 +634,12 @@ function finishTest() {
 function resetTest() {
   clearInterval(timer);
   clearTimeout(finishTimeout);
-finishTimeout = null;
-testState = 'READY';
+  finishTimeout = null;
+  testState = 'READY';
   timer = null;
   isTyping = false;
   isPasting = false;
+  disqualified = false;
   clearTimeout(pasteResetTimeout);
   startTime = null;
   lastResultSummary = '';
@@ -614,7 +653,12 @@ testState = 'READY';
     inputEl.disabled = false;
   }
   charStates = new Array(currentPassage.length).fill('');
-  if (resultEl) resultEl.classList.add('hidden');
+  if (resultEl) {
+    resultEl.classList.add('hidden');
+    resultEl.style.borderColor = '';
+    resultEl.style.color = '';
+    resultEl.style.background = '';
+  }
   if (statusEl) statusEl.textContent = 'READY WHEN YOU ARE';
   wpmHistory = [];
   drawGraph();
