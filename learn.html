@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Learn practical Computer Science concepts through focused explanations, typing practice, and recall challenges." />
+  <meta name="theme-color" content="#08090a" />
+  <title>Learn Mode — BrokenKey</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="learn-mode.css" />
+</head>
+<body class="learn-page" data-learn-app>
+  <main class="container learn-container">
+    <header class="topbar learn-topbar">
+      <div class="brand">
+        <a class="learn-back-home" href="index.html" aria-label="Back to typing practice">←</a>
+        <div class="brand-copy">
+          <h1>Learn Mode</h1>
+          <p class="eyebrow">UNDERSTAND // TYPE // RECALL</p>
+          <span class="brand-stamp">PRACTICE WITH PURPOSE</span>
+        </div>
+      </div>
+      <div class="learn-header-actions">
+        <a class="btn btn-secondary learn-home-link" href="index.html">Typing practice</a>
+        <button id="theme-btn" class="icon-btn" type="button" aria-label="Toggle light and dark mode">☼ <span>Light mode</span></button>
+      </div>
+    </header>
+
+    <section class="learn-intro" aria-labelledby="learn-page-title">
+      <div>
+        <p class="learn-kicker">A DIFFERENT KIND OF TYPING PRACTICE</p>
+        <h2 id="learn-page-title">Learn something useful.<br /><span>Remember what you understand.</span></h2>
+        <p class="learn-intro-copy">Explore practical Computer Science topics. Understand the concept, reinforce it by typing, and check what you remember.</p>
+      </div>
+      <div class="learn-method" aria-label="Three-stage learning workflow">
+        <div><span>01</span><strong>Understand</strong><small>Build the mental model</small></div>
+        <div><span>02</span><strong>Type to Learn</strong><small>Reinforce with practice</small></div>
+        <div><span>03</span><strong>Recall</strong><small>Retrieve from memory</small></div>
+      </div>
+    </section>
+
+    <section id="learn-catalog" class="learn-catalog" aria-labelledby="learn-catalog-title">
+      <div class="learn-section-heading">
+        <div><p class="learn-kicker">YOUR LEARNING SPACE</p><h2 id="learn-catalog-title">Explore lessons</h2></div>
+        <button id="learn-resume-button" class="btn btn-secondary" type="button" hidden>Resume last lesson ↗</button>
+      </div>
+
+      <section class="learn-progress-card" aria-label="Overall learning progress">
+        <div class="learn-progress-copy"><span class="learn-card-label">YOUR PROGRESS</span><strong id="learn-progress-label">0 of 6 lessons completed</strong></div>
+        <strong id="learn-progress-value" class="learn-progress-number">0%</strong>
+        <div class="learn-progress-track" role="progressbar" aria-label="Completed lessons" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="learn-progress-bar"><span id="learn-progress-fill"></span></div>
+      </section>
+
+      <div id="learn-category-filters" class="learn-category-filters" aria-label="Filter lessons by category"></div>
+      <div id="learn-lessons-grid" class="learn-lessons-grid" aria-live="polite"></div>
+      <p id="learn-empty-state" class="learn-empty-state" hidden>No lessons are available in this category.</p>
+    </section>
+
+    <section id="learn-lesson-view" class="learn-lesson-view" hidden aria-labelledby="learn-lesson-title">
+      <div class="learn-lesson-toolbar">
+        <button id="learn-back-to-catalog" class="learn-text-button" type="button">← All lessons</button>
+        <span id="learn-lesson-position" class="learn-lesson-position"></span>
+      </div>
+
+      <div class="learn-lesson-heading">
+        <div class="learn-lesson-meta"><span id="learn-lesson-category"></span><span id="learn-lesson-difficulty"></span></div>
+        <h2 id="learn-lesson-title"></h2>
+        <p id="learn-lesson-objective" class="learn-objective"></p>
+      </div>
+
+      <nav class="learn-stepper" aria-label="Lesson stages">
+        <span class="learn-step active" data-step-indicator="understand" aria-current="step"><span>01</span> Understand</span>
+        <span class="learn-step-line" aria-hidden="true"></span>
+        <span class="learn-step" data-step-indicator="type"><span>02</span> Type to Learn</span>
+        <span class="learn-step-line" aria-hidden="true"></span>
+        <span class="learn-step" data-step-indicator="recall"><span>03</span> Recall</span>
+      </nav>
+
+      <section id="learn-understand-panel" class="learn-stage-panel" aria-labelledby="learn-understand-title">
+        <div class="learn-stage-heading"><p class="learn-kicker">STAGE 01 / BUILD YOUR UNDERSTANDING</p><h3 id="learn-understand-title">Understand the concept</h3></div>
+        <div id="learn-explanation" class="learn-explanation"></div>
+        <article class="learn-example-card"><span class="learn-card-label">PUT IT INTO CONTEXT</span><h4 id="learn-example-title"></h4><p id="learn-example-copy"></p></article>
+        <div class="learn-references"><span class="learn-card-label">FURTHER READING</span><ul id="learn-references-list"></ul></div>
+        <div class="learn-stage-actions"><span class="learn-stage-hint">Take a moment to understand the idea before moving on.</span><button id="learn-start-typing" class="btn btn-primary" type="button">I understand — start typing ↗</button></div>
+      </section>
+
+      <section id="learn-type-panel" class="learn-stage-panel" hidden aria-labelledby="learn-type-title">
+        <div class="learn-stage-heading"><p class="learn-kicker">STAGE 02 / REINFORCE THE CONCEPT</p><h3 id="learn-type-title">Type to learn</h3><p class="learn-stage-description">This passage is untimed. Focus on accuracy and meaning, not speed. Backspace is enabled so you can correct mistakes.</p></div>
+        <div class="learn-typing-stats" aria-live="polite">
+          <div><span>TIME</span><strong id="time">UNTIMED</strong></div>
+          <div><span>WPM</span><strong id="wpm">0</strong></div>
+          <div><span>ACCURACY</span><strong id="accuracy">100%</strong></div>
+          <div><span>MISTAKES</span><strong id="mistakes">0</strong></div>
+        </div>
+        <div id="passage" class="passage learn-typing-passage" aria-label="Lesson passage to type"></div>
+        <label class="sr-only" for="typing-input">Type the lesson passage here</label>
+        <textarea id="typing-input" class="typing-input learn-typing-input" rows="4" placeholder="Click Start typing, then type the passage here…" disabled spellcheck="false" autocapitalize="off" autocomplete="off"></textarea>
+        <p class="learn-input-hint"><span>BACKSPACE TO CORRECT</span><span>NO TIMER · NO PERSONAL BEST IMPACT</span></p>
+        <p id="learn-typing-status" class="learn-typing-status" role="status">Your typing session is ready.</p>
+        <div class="learn-stage-actions">
+          <button id="learn-back-to-understand" class="btn btn-secondary" type="button">← Review explanation</button>
+          <button id="learn-retry-typing" class="btn btn-secondary" type="button">↻ Retry passage</button>
+        </div>
+      </section>
+
+      <section id="learn-recall-panel" class="learn-stage-panel" hidden aria-labelledby="learn-recall-title">
+        <div class="learn-stage-heading"><p class="learn-kicker">STAGE 03 / RETRIEVE FROM MEMORY</p><h3 id="learn-recall-title">Recall what you learned</h3><p class="learn-stage-description">The explanation is hidden now. Answer in your own words. You do not need to match the reference answer exactly.</p></div>
+        <div class="learn-question-card"><span class="learn-card-label">YOUR RECALL QUESTION</span><h4 id="learn-recall-question"></h4></div>
+        <label class="learn-answer-label" for="learn-answer-input">Your answer</label>
+        <textarea id="learn-answer-input" class="learn-answer-input" rows="5" placeholder="Explain the concept in your own words…"></textarea>
+        <button id="learn-submit-answer" class="btn btn-primary" type="button">Show reference answer</button>
+        <article id="learn-answer-review" class="learn-answer-review" hidden aria-live="polite">
+          <span class="learn-card-label">REFERENCE ANSWER</span>
+          <p id="learn-expected-answer"></p>
+          <p class="learn-self-assessment">Compare the key ideas with your answer. This is a self-assessment, not an automated grade.</p>
+          <div class="learn-rating-actions"><button id="learn-remembered" class="btn btn-primary" type="button">I remembered it</button><button id="learn-review-again" class="btn btn-secondary" type="button">Review again</button></div>
+        </article>
+      </section>
+
+      <section id="learn-complete-panel" class="learn-stage-panel learn-complete-panel" hidden aria-labelledby="learn-complete-title">
+        <span class="learn-complete-mark" aria-hidden="true">✓</span>
+        <p class="learn-kicker">LESSON COMPLETED</p>
+        <h3 id="learn-complete-title">Knowledge reinforced.</h3>
+        <p id="learn-complete-copy"></p>
+        <div class="learn-complete-stats"><div><span>BEST ACCURACY</span><strong id="learn-complete-accuracy">—</strong></div><div><span>LESSONS COMPLETED</span><strong id="learn-complete-count">0 / 6</strong></div></div>
+        <div class="learn-stage-actions"><button id="learn-finish-back" class="btn btn-secondary" type="button">All lessons</button><button id="learn-next-lesson" class="btn btn-primary" type="button">Next lesson ↗</button></div>
+      </section>
+    </section>
+
+    <footer class="learn-footer"><span>BUILT FOR CURIOUS MINDS</span><span>UNDERSTAND · TYPE · RECALL</span></footer>
+  </main>
+
+  <!-- Minimal compatibility controls required by the shared typing engine. -->
+  <span id="best" class="sr-only">0</span>
+  <span id="status-label" class="sr-only">READY</span>
+  <button id="start-btn" class="sr-only" type="button" tabindex="-1" aria-hidden="true">Start</button>
+  <div id="result" class="hidden sr-only" role="status"></div>
+
+  <script src="script.js"></script>
+  <script type="module" src="learn-mode.js"></script>
+</body>
+</html>

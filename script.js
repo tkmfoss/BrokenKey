@@ -40,7 +40,9 @@ let currentPassage = '',
   timeLeft = 30,
   timeLimit = 30,
   startTime = null;
-  let testState = 'READY';   // 'READY' | 'RUNNING' | 'COMPLETED'
+let isLearningSession = false;
+let learningSessionCompleteHandler = null;
+let testState = 'READY';   // 'READY' | 'RUNNING' | 'COMPLETED'
 let finishTimeout = null;
 
 let lastResultSummary = '';
@@ -418,7 +420,7 @@ function handleInput(event) {
   renderPassage();
   updateStats();
 
-  if (isTyping && startTime && typeof sessionReplayEvents !== 'undefined') {
+  if (isTyping && !isLearningSession && startTime && typeof sessionReplayEvents !== 'undefined') {
     sessionReplayEvents.push({
       t: Date.now() - startTime,
       val: typed,
@@ -468,10 +470,13 @@ function updateStats() {
   if (wpmEl) wpmEl.textContent = calculateWPM();
   if (accuracyEl) accuracyEl.textContent = `${calculateAccuracy()}%`;
   if (mistakesEl) mistakesEl.textContent = mistakes;
-  if (timeEl) timeEl.innerHTML = `${timeLeft}<span class="unit">s</span>`;
+  if (timeEl) {
+    if (isLearningSession) timeEl.textContent = 'UNTIMED';
+    else timeEl.innerHTML = `${timeLeft}<span class="unit">s</span>`;
+  }
   const timeLabel = $('time-stat-label');
   if (timeLabel) {
-    timeLabel.textContent = timeLimit === 0 ? 'Time elapsed' : 'Time left';
+    timeLabel.textContent = isLearningSession ? 'Learning session' : (timeLimit === 0 ? 'Time elapsed' : 'Time left');
   }
 }
 
@@ -488,12 +493,21 @@ function startTimer() {
   isTyping = true;
   startTime = Date.now();
   timeLeft = timeLimit === 0 ? 0 : timeLimit;
-  sessionReplayEvents = [{ t: 0, val: '', cursor: 0, wpm: 0, errors: 0 }];
+  sessionReplayEvents = isLearningSession ? [] : [{ t: 0, val: '', cursor: 0, wpm: 0, errors: 0 }];
   if (replayBtn) replayBtn.classList.add('hidden');
-  if (stopBtn) stopBtn.classList.remove('hidden');
-  statusEl.textContent = timeLimit === 0 ? 'FREE RUN (UNTIMED)' : 'TEST IN PROGRESS';
+  if (stopBtn) stopBtn.classList.add('hidden');
+  if (!isLearningSession && stopBtn) stopBtn.classList.remove('hidden');
+  statusEl.textContent = isLearningSession ? 'LEARNING IN PROGRESS' : (timeLimit === 0 ? 'FREE RUN (UNTIMED)' : 'TEST IN PROGRESS');
   wpmHistory = [{ time: 0, wpm: 0 }];
   drawGraph();
+
+  // Learn Mode reuses the input engine but intentionally has no countdown or replay capture.
+  if (isLearningSession) {
+    if (timeEl) timeEl.textContent = 'UNTIMED';
+    if (timeStatLabelEl) timeStatLabelEl.textContent = 'Learning session';
+    return;
+  }
+
   timer = setInterval(() => {
     if (timeLimit === 0) {
       timeLeft++;
@@ -530,7 +544,7 @@ function finishTest() {
   if (replayBtn) replayBtn.classList.add('hidden');
   if (typeof closeReplayModal === 'function') closeReplayModal();
 
-  statusEl.textContent = 'TEST COMPLETE';
+  statusEl.textContent = isLearningSession ? 'LEARNING PASSAGE COMPLETE' : 'TEST COMPLETE';
 
   renderPassage();
   updateHeatmap();
@@ -538,6 +552,34 @@ function finishTest() {
 
   const finalWPM = calculateWPM();
   const finalAccuracy = calculateAccuracy();
+
+  if (isLearningSession) {
+    if (resultEl) {
+      resultEl.classList.remove('hidden');
+      resultEl.textContent = `Learning passage complete · ${finalWPM} WPM · ${finalAccuracy}% accuracy`;
+    }
+
+    const completionHandler = learningSessionCompleteHandler;
+    learningSessionCompleteHandler = null;
+    keyMistakes = {};
+    keySubstitutions = {};
+    lastTrackedKeydownPos = -1;
+    lastProcessedLength = 0;
+    updateHeatmap(true);
+    if (bestEl) bestEl.textContent = bestWPM;
+
+    if (typeof completionHandler === 'function') {
+      completionHandler({
+        wpm: finalWPM,
+        accuracy: finalAccuracy,
+        mistakes,
+        totalTyped,
+        correctTyped,
+        elapsedSeconds: startTime ? Math.max(0, (Date.now() - startTime) / 1000) : 0
+      });
+    }
+    return;
+  }
 
   if (finalWPM > bestWPM) {
     bestWPM = finalWPM;
@@ -593,7 +635,11 @@ function finishTest() {
 }
 
 
-function resetTest() {
+function resetTest(options = {}) {
+  if (!options || options.preserveLearningSession !== true) {
+    isLearningSession = false;
+    learningSessionCompleteHandler = null;
+  }
   clearInterval(timer);
   clearTimeout(finishTimeout);
 finishTimeout = null;
@@ -625,6 +671,47 @@ testState = 'READY';
   if (stopBtn) stopBtn.classList.add('hidden');
   if (replayBtn) replayBtn.classList.add('hidden');
   if (typeof closeReplayModal === 'function') closeReplayModal();
+}
+
+function startLearningSession(passage, onComplete) {
+  if (!inputEl || !passageEl || typeof passage !== 'string' || passage.trim().length === 0) return false;
+
+  isLearningSession = true;
+  learningSessionCompleteHandler = typeof onComplete === 'function' ? onComplete : null;
+  keyMistakes = {};
+  keySubstitutions = {};
+  lastTrackedKeydownPos = -1;
+  lastProcessedLength = 0;
+  isCustomPassage = false;
+  customPassageText = '';
+  currentPassage = passage;
+
+  resetTest({ preserveLearningSession: true });
+  testState = 'RUNNING';
+  inputEl.maxLength = passage.length;
+  inputEl.disabled = false;
+  if (startBtn) startBtn.disabled = true;
+  startTimer();
+  inputEl.focus();
+  return true;
+}
+
+function cancelLearningSession() {
+  if (!isLearningSession) return false;
+  resetTest();
+  if (timeEl) timeEl.innerHTML = `${timeLeft}<span class="unit">s</span>`;
+  return true;
+}
+
+function getLearningMetrics() {
+  return {
+    wpm: calculateWPM(),
+    accuracy: calculateAccuracy(),
+    mistakes,
+    totalTyped,
+    correctTyped,
+    elapsedSeconds: startTime ? Math.max(0, (Date.now() - startTime) / 1000) : 0
+  };
 }
 
 if (startBtn) {
@@ -1721,7 +1808,13 @@ if (typeof window !== 'undefined') window.addEventListener('keydown', (e) => {
 // Initialize Audio UI state on page load
 updateAudioUI();
 
-
+if (isBrowser) {
+  window.BrokenKeyTyping = Object.freeze({
+    startLearningSession,
+    cancelLearningSession,
+    getMetrics: getLearningMetrics
+  });
+}
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
@@ -1767,6 +1860,9 @@ if (typeof module !== 'undefined' && module.exports) {
     setTestTotalTyped: (v) => { totalTyped = v; },
     setTestCorrectTyped: (v) => { correctTyped = v; },
     setTestMistakes: (v) => { mistakes = v; },
+    startLearningSession,
+    cancelLearningSession,
+    getLearningMetrics,
     getLastResultSummary: () => lastResultSummary,
     SoundEngine,
     soundEngine,
