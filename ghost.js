@@ -621,6 +621,14 @@ timeDifference.textContent = "";
             block: "nearest"
         });
     });
+
+    recordCompletedRaceAnalytics({
+        wpm: playerResult.wpm,
+        accuracy: Number(playerResult.accuracy.toFixed(1)),
+        score: Number(playerResult.score.toFixed(2)),
+        difficulty: difficulty.value,
+        outcome: winnerHeading.textContent
+    });
 }
 // Reset game
 function resetGame({ preservePassage = false } = {}) {
@@ -714,9 +722,160 @@ themeBtn.addEventListener("click", () => {
         document.body.classList.contains("light-mode")
             ? "☾ Dark mode"
             : "☼ Light mode";
+
+    const api = getGhostAnalyticsApi();
+    if (api) {
+        drawGhostHistoryChart(
+            api.loadGhostAnalytics(typeof localStorage !== "undefined" ? localStorage : null).history
+        );
+    }
 });
 updateDifficultySelection();
 preparePassage();
+
+// ===== GHOST PERFORMANCE ANALYTICS =====
+
+function getGhostAnalyticsApi() {
+    return typeof window !== "undefined" && window.GhostAnalytics
+        ? window.GhostAnalytics
+        : null;
+}
+
+function getCssToken(name, fallback) {
+    if (typeof getComputedStyle !== "function") return fallback;
+    const val = getComputedStyle(document.body).getPropertyValue(name).trim();
+    return val || fallback;
+}
+
+function drawGhostHistoryChart(history) {
+    const canvas = document.getElementById("ghost-wpm-chart");
+    const emptyState = document.getElementById("ghost-chart-empty");
+    if (!canvas) return;
+
+    if (!history || history.length === 0) {
+        canvas.hidden = true;
+        if (emptyState) emptyState.hidden = false;
+        return;
+    }
+
+    canvas.hidden = false;
+    if (emptyState) emptyState.hidden = true;
+
+    if (typeof canvas.getContext !== "function") return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const width = canvas.width || 820;
+    const height = canvas.height || 220;
+    const pad = { top: 22, right: 24, bottom: 32, left: 44 };
+    const plotW = width - pad.left - pad.right;
+    const plotH = height - pad.top - pad.bottom;
+
+    const gridColor = getCssToken("--border", "#30363d");
+    const mutedColor = getCssToken("--muted", "#8b949e");
+    const accentColor = getCssToken("--accent", "#c3e826");
+    const textColor = getCssToken("--text", "#e6edf3");
+    const winColor = getCssToken("--correct", "#3fb950");
+
+    ctx.clearRect(0, 0, width, height);
+
+    const maxWpm = Math.max(40, ...history.map((r) => r.wpm));
+    const yCeiling = Math.ceil(maxWpm / 20) * 20;
+
+    ctx.font = "600 11px ui-monospace, SFMono-Regular, Consolas, monospace";
+    ctx.textBaseline = "middle";
+
+    const steps = 4;
+    for (let i = 0; i <= steps; i++) {
+        const value = Math.round((yCeiling / steps) * i);
+        const y = pad.top + plotH - (plotH * i) / steps;
+
+        ctx.strokeStyle = gridColor;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(pad.left, y);
+        ctx.lineTo(pad.left + plotW, y);
+        ctx.stroke();
+
+        ctx.fillStyle = mutedColor;
+        ctx.textAlign = "right";
+        ctx.fillText(String(value), pad.left - 8, y);
+    }
+
+    const points = history.map((item, idx) => {
+        const x = history.length === 1
+            ? pad.left + plotW / 2
+            : pad.left + (plotW * idx) / (history.length - 1);
+        const y = pad.top + plotH - (item.wpm / yCeiling) * plotH;
+        return { x, y, item, label: `#${idx + 1}` };
+    });
+
+    if (points.length > 1) {
+        ctx.strokeStyle = accentColor;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        points.forEach((pt, idx) => {
+            if (idx === 0) ctx.moveTo(pt.x, pt.y);
+            else ctx.lineTo(pt.x, pt.y);
+        });
+        ctx.stroke();
+    }
+
+    points.forEach((pt) => {
+        ctx.fillStyle = pt.item.outcome === "YOU WIN!" ? winColor : accentColor;
+        ctx.beginPath();
+        ctx.arc(pt.x, pt.y, 4.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = textColor;
+        ctx.textAlign = "center";
+        ctx.fillText(`${pt.item.wpm}`, pt.x, Math.max(pad.top - 10, pt.y - 12));
+
+        ctx.fillStyle = mutedColor;
+        ctx.fillText(pt.label, pt.x, pad.top + plotH + 16);
+    });
+}
+
+function renderGhostAnalytics({ showNewBest = false } = {}) {
+    const api = getGhostAnalyticsApi();
+    if (!api) return;
+
+    const summary = api.loadGhostAnalytics(typeof localStorage !== "undefined" ? localStorage : null);
+    const bestWpmEl = document.getElementById("ghost-stat-best-wpm");
+    const avgWpmEl = document.getElementById("ghost-stat-avg-wpm");
+    const bestAccEl = document.getElementById("ghost-stat-best-accuracy");
+    const totalRacesEl = document.getElementById("ghost-stat-total-races");
+    const pbBadgeEl = document.getElementById("ghost-new-pb-badge");
+
+    if (bestWpmEl) bestWpmEl.textContent = String(summary.bestWpm);
+    if (avgWpmEl) avgWpmEl.textContent = String(summary.averageWpm);
+    if (bestAccEl) bestAccEl.textContent = `${summary.bestAccuracy}%`;
+    if (totalRacesEl) totalRacesEl.textContent = String(summary.totalRaces);
+    if (pbBadgeEl) pbBadgeEl.classList.toggle("hidden", !showNewBest);
+
+    drawGhostHistoryChart(summary.history);
+}
+
+function recordCompletedRaceAnalytics(raceEntry) {
+    const api = getGhostAnalyticsApi();
+    if (!api) return;
+
+    const storage = typeof localStorage !== "undefined" ? localStorage : null;
+    const updated = api.recordGhostRace(storage, raceEntry);
+    renderGhostAnalytics({ showNewBest: Boolean(updated && updated.isNewBestWpm) });
+}
+
+const clearAnalyticsBtn = document.getElementById("clear-ghost-analytics-btn");
+if (clearAnalyticsBtn) {
+    clearAnalyticsBtn.addEventListener("click", () => {
+        const api = getGhostAnalyticsApi();
+        if (!api) return;
+        api.clearGhostAnalytics(typeof localStorage !== "undefined" ? localStorage : null);
+        renderGhostAnalytics({ showNewBest: false });
+    });
+}
+
+renderGhostAnalytics();
 
 // ===== RULES POPUP =====
 

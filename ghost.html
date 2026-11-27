@@ -122,6 +122,43 @@
         <p id="time-difference"></p>
       </div>
 
+      <section id="ghost-analytics" class="ghost-analytics" aria-labelledby="ghost-analytics-heading">
+        <div class="ghost-analytics-header">
+          <div>
+            <h2 id="ghost-analytics-heading">Ghost Performance Analytics</h2>
+            <p class="ghost-analytics-subtitle">Saved locally per Ghost Mode race (separate from main Practice PB)</p>
+          </div>
+          <div class="ghost-analytics-actions">
+            <span id="ghost-new-pb-badge" class="ghost-pb-badge hidden">NEW GHOST PB</span>
+            <button id="clear-ghost-analytics-btn" class="btn btn-secondary ghost-clear-btn" type="button">Clear History</button>
+          </div>
+        </div>
+
+        <div class="ghost-stats-grid">
+          <div class="ghost-stat-card">
+            <span class="ghost-stat-label">Best WPM</span>
+            <strong id="ghost-stat-best-wpm" class="ghost-stat-value">0</strong>
+          </div>
+          <div class="ghost-stat-card">
+            <span class="ghost-stat-label">Average WPM</span>
+            <strong id="ghost-stat-avg-wpm" class="ghost-stat-value">0</strong>
+          </div>
+          <div class="ghost-stat-card">
+            <span class="ghost-stat-label">Best Accuracy</span>
+            <strong id="ghost-stat-best-accuracy" class="ghost-stat-value">0%</strong>
+          </div>
+          <div class="ghost-stat-card">
+            <span class="ghost-stat-label">Completed Races</span>
+            <strong id="ghost-stat-total-races" class="ghost-stat-value">0</strong>
+          </div>
+        </div>
+
+        <div class="ghost-chart-wrap">
+          <p id="ghost-chart-empty" class="ghost-chart-empty">Complete a Ghost Mode race to track your WPM progression.</p>
+          <canvas id="ghost-wpm-chart" width="820" height="220" aria-label="Ghost Mode recent races WPM graph" hidden></canvas>
+        </div>
+      </section>
+
       <div id="rules-modal" class="rules-modal" hidden>
         <div class="rules-modal-content" role="dialog" aria-modal="true" aria-labelledby="rules-title">
           <h2 id="rules-title">👻 Ghost Mode Rules</h2>
@@ -151,6 +188,7 @@
     </section>
   </main>
 
+  <script src="ghost-analytics.js" defer></script>
   <script src="ghost.js" defer></script>
 </body>
 </html>
