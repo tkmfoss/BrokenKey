@@ -30,6 +30,7 @@ class MockElement extends EventTarget {
   }
   querySelector() { return new MockElement(); }
   querySelectorAll() { return []; }
+  setSelectionRange(start, end) { this.selectionStart = start; this.selectionEnd = end; }
   getContext() { return null; }
   focus() {}
   setAttribute(name, value) { this.attributes[name] = String(value); }
@@ -152,4 +153,48 @@ test('drop and paste events are prevented only in code practice', () => {
   const drop = new Event('drop', {cancelable: true});
   input.dispatchEvent(drop);
   assert.equal(drop.defaultPrevented, false);
+});
+
+function pressTab(app, modifiers = {}) {
+  const event = new Event('keydown', { cancelable: true });
+  for (const [name, value] of Object.entries({ key: 'Tab', shiftKey: false, ctrlKey: false, altKey: false, metaKey: false, ...modifiers })) {
+    Object.defineProperty(event, name, { value });
+  }
+  app.elements.get('typing-input').dispatchEvent(event);
+  return event.defaultPrevented;
+}
+test('Tab inserts the selected indentation unit and advances the caret without losing focus', () => {
+  for (const indent of ['  ', '    ', '\t']) {
+    const app = loadTypingEngine(), done = [], edits = [];
+    const api = app.window.BrokenKeyTyping, source = 'x\n' + indent + indent + 'y';
+    api.startCodeSession(source, { ...options(source, done, (...args) => edits.push(args)), indent });
+    type(app, 'x');
+    type(app, 'x\n');
+    assert.equal(pressTab(app), true);
+    assert.equal(pressTab(app), true);
+    const input = app.elements.get('typing-input');
+    assert.equal(input.value, 'x\n' + indent + indent);
+    assert.equal(input.selectionStart, input.value.length);
+    assert.equal(edits.at(-1)[1], input.value);
+    type(app, source);
+    assert.equal(done.length, 1);
+    api.cancelCodeSession();
+  }
+});
+test('Shift+Tab, modified Tab, and Tab outside leading whitespace retain browser navigation', () => {
+  const app = loadTypingEngine(), api = app.window.BrokenKeyTyping;
+  api.startCodeSession('x\n    y', options('x\n    y', []));
+  type(app, 'x');
+  assert.equal(pressTab(app), false);
+  type(app, 'x\n');
+  assert.equal(pressTab(app, { shiftKey: true }), false);
+  assert.equal(pressTab(app, { ctrlKey: true }), false);
+  assert.equal(pressTab(app, { altKey: true }), false);
+  assert.equal(pressTab(app, { metaKey: true }), false);
+  assert.equal(app.elements.get('typing-input').value, 'x\n');
+  api.cancelCodeSession();
+  api.startLearningSession('lesson', () => {});
+  assert.equal(pressTab(app), false);
+  api.cancelLearningSession();
+  assert.equal(pressTab(app), false);
 });

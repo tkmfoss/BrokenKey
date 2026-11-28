@@ -333,6 +333,12 @@ function handleKeyDown(event) {
 
   // Ignore modifier combinations (shortcuts like Ctrl+C, Cmd+V)
   if (event.ctrlKey || event.metaKey || event.altKey) return;
+  // Code Arena only: Tab inserts the configured indentation unit at a line's
+  // leading whitespace. Shift+Tab always retains native focus navigation.
+  if (event.key === 'Tab' && codeSession && !event.shiftKey) {
+    if (insertCodeIndent()) event.preventDefault();
+    return;
+  }
   // Ignore non-printable keys (Shift, CapsLock, Tab, Arrow keys)
   if (event.key.length > 1 && event.key !== 'Enter') return;
 

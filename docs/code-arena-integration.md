@@ -13,3 +13,5 @@ Reuse the existing BrokenKeyTyping session interface from script.js for timer, i
 The first implementation slice contains the original curated snippets (four languages, three tiers), lexical tokenizer, construct attempt tracker, deterministic selector, bounded storage and unit tests. The second slice integrates a dedicated page via the shared untimed session adapter, exact completion, code-only paste/drop restrictions, token highlighting, explicit indentation, attempt accuracy and deterministic adapter tests. General and Learn Mode behavior is preserved by opt-in code session hooks. Browser/mobile visual verification remains a separate acceptance check.
 
 Lexical categories are not full-language parsers or compiler diagnostics: advanced constructs such as JavaScript regex literals, C++ raw strings and Python contextual keywords may require additional lexical rules if added to the curated corpus.
+
+Code practice supports native Tab for indentation through the same validated insertion path as the on-screen button. Shift+Tab and Tab outside leading whitespace retain focus navigation; normal typing and Learn Mode are unaffected.
