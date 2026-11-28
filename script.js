@@ -42,6 +42,8 @@ let currentPassage = '',
   startTime = null;
 let isLearningSession = false;
 let learningSessionCompleteHandler = null;
+// Optional code-specific hooks for the existing untimed session lifecycle.
+let codeSession = null;
 let testState = 'READY';   // 'READY' | 'RUNNING' | 'COMPLETED'
 let finishTimeout = null;
 
@@ -298,6 +300,7 @@ function renderPassage() {
   let html = '';
   for (let i = 0; i < currentPassage.length; i++) {
     let cls = 'char';
+    if (codeSession) cls += ' token-' + codeSession.tokenKinds[i];
     if (charStates[i] === 'correct') cls += ' correct';
     if (charStates[i] === 'wrong') cls += ' wrong';
     if (i === charIndex && isTyping) cls += ' current';
@@ -313,7 +316,8 @@ function escapeHTML(value) {
 let isPasting = false;
 let pasteResetTimeout = null;
 
-function handlePaste() {
+function handlePaste(event) {
+  if (codeSession) { event?.preventDefault(); return; }
   isPasting = true;
   clearTimeout(pasteResetTimeout);
   pasteResetTimeout = setTimeout(() => {
@@ -329,6 +333,12 @@ function handleKeyDown(event) {
 
   // Ignore modifier combinations (shortcuts like Ctrl+C, Cmd+V)
   if (event.ctrlKey || event.metaKey || event.altKey) return;
+  // Code Arena only: Tab inserts the configured indentation unit at a line's
+  // leading whitespace. Shift+Tab always retains native focus navigation.
+  if (event.key === 'Tab' && codeSession && !event.shiftKey) {
+    if (insertCodeIndent()) event.preventDefault();
+    return;
+  }
   // Ignore non-printable keys (Shift, CapsLock, Tab, Arrow keys)
   if (event.key.length > 1 && event.key !== 'Enter') return;
 
@@ -356,6 +366,16 @@ function handleKeyDown(event) {
 
 function handleInput(event) {
   const typed = inputEl.value;
+  if (codeSession) {
+    const type = event?.inputType || '';
+    const bulk = typed.length - codeSession.previous.length > 1 || (event?.data?.length || 0) > 1;
+    if (testState !== 'RUNNING' || /^(insertFromPaste|insertFromDrop|insertReplacementText)/.test(type) ||
+        (bulk && !codeSession.insertingIndent) || typed.length > currentPassage.length) {
+      inputEl.value = codeSession.previous;
+      codeSession.selection = null;
+      return;
+    }
+  }
   if (testState === 'READY' && !isTyping && typed.length > 0) startTest();
   const wasPasted = Boolean(
     isPasting ||
@@ -430,12 +450,31 @@ function handleInput(event) {
     });
   }
 
-  const isPassageComplete = charIndex === currentPassage.length && charStates[currentPassage.length - 1] === 'correct';
+  if (codeSession) {
+    const previous = codeSession.previous;
+    const selection = codeSession.selection;
+    codeSession.previous = typed;
+    codeSession.selection = null;
+    if (event?.inputType !== 'historyUndo' && event?.inputType !== 'historyRedo') {
+      codeSession.onInput?.(previous, typed, selection);
+    }
+  }
+  const isPassageComplete = codeSession ? typed === currentPassage :
+    charIndex === currentPassage.length && charStates[currentPassage.length - 1] === 'correct';
   if (isPassageComplete) finishTest();
 }
 
 if (inputEl) {
   inputEl.addEventListener('paste', handlePaste);
+  inputEl.addEventListener('drop', event => { if (codeSession) event.preventDefault(); });
+  inputEl.addEventListener('beforeinput', event => {
+    if (!codeSession) return;
+    if (/^(insertFromPaste|insertFromDrop|insertReplacementText)/.test(event.inputType || '')) {
+      event.preventDefault();
+      return;
+    }
+    codeSession.selection = { start: inputEl.selectionStart, end: inputEl.selectionEnd };
+  });
   inputEl.addEventListener('keydown', handleKeyDown);
   inputEl.addEventListener('input', handleInput);
   inputEl.addEventListener('focus', () => {
@@ -476,7 +515,7 @@ function updateStats() {
   }
   const timeLabel = $('time-stat-label');
   if (timeLabel) {
-    timeLabel.textContent = isLearningSession ? 'Learning session' : (timeLimit === 0 ? 'Time elapsed' : 'Time left');
+    timeLabel.textContent = isLearningSession ? (codeSession ? 'Code practice' : 'Learning session') : (timeLimit === 0 ? 'Time elapsed' : 'Time left');
   }
 }
 
@@ -497,14 +536,14 @@ function startTimer() {
   if (replayBtn) replayBtn.classList.add('hidden');
   if (stopBtn) stopBtn.classList.add('hidden');
   if (!isLearningSession && stopBtn) stopBtn.classList.remove('hidden');
-  statusEl.textContent = isLearningSession ? 'LEARNING IN PROGRESS' : (timeLimit === 0 ? 'FREE RUN (UNTIMED)' : 'TEST IN PROGRESS');
+  statusEl.textContent = isLearningSession ? (codeSession ? 'CODE PRACTICE IN PROGRESS' : 'LEARNING IN PROGRESS') : (timeLimit === 0 ? 'FREE RUN (UNTIMED)' : 'TEST IN PROGRESS');
   wpmHistory = [{ time: 0, wpm: 0 }];
   drawGraph();
 
   // Learn Mode reuses the input engine but intentionally has no countdown or replay capture.
   if (isLearningSession) {
     if (timeEl) timeEl.textContent = 'UNTIMED';
-    if (timeStatLabelEl) timeStatLabelEl.textContent = 'Learning session';
+    if (timeStatLabelEl) timeStatLabelEl.textContent = codeSession ? 'Code practice' : 'Learning session';
     return;
   }
 
@@ -544,7 +583,7 @@ function finishTest() {
   if (replayBtn) replayBtn.classList.add('hidden');
   if (typeof closeReplayModal === 'function') closeReplayModal();
 
-  statusEl.textContent = isLearningSession ? 'LEARNING PASSAGE COMPLETE' : 'TEST COMPLETE';
+  statusEl.textContent = isLearningSession ? (codeSession ? 'CODE PASSAGE COMPLETE' : 'LEARNING PASSAGE COMPLETE') : 'TEST COMPLETE';
 
   renderPassage();
   updateHeatmap();
@@ -556,7 +595,7 @@ function finishTest() {
   if (isLearningSession) {
     if (resultEl) {
       resultEl.classList.remove('hidden');
-      resultEl.textContent = `Learning passage complete · ${finalWPM} WPM · ${finalAccuracy}% accuracy`;
+      resultEl.textContent = (codeSession ? 'Code passage complete' : 'Learning passage complete') + ` · ${finalWPM} WPM · ${finalAccuracy}% accuracy`;
     }
 
     const completionHandler = learningSessionCompleteHandler;
@@ -639,6 +678,7 @@ function resetTest(options = {}) {
   if (!options || options.preserveLearningSession !== true) {
     isLearningSession = false;
     learningSessionCompleteHandler = null;
+    codeSession = null;
   }
   clearInterval(timer);
   clearTimeout(finishTimeout);
@@ -673,9 +713,10 @@ testState = 'READY';
   if (typeof closeReplayModal === 'function') closeReplayModal();
 }
 
-function startLearningSession(passage, onComplete) {
+function startLearningSession(passage, onComplete, codeOptions = null) {
   if (!inputEl || !passageEl || typeof passage !== 'string' || passage.trim().length === 0) return false;
 
+  codeSession = codeOptions;
   isLearningSession = true;
   learningSessionCompleteHandler = typeof onComplete === 'function' ? onComplete : null;
   keyMistakes = {};
@@ -694,6 +735,44 @@ function startLearningSession(passage, onComplete) {
   startTimer();
   inputEl.focus();
   return true;
+}
+
+// A narrow adapter: code mode uses the same scoring, timer, input and cleanup as Learn Mode.
+function startCodeSession(passage, options = {}) {
+  if (typeof passage !== 'string' || !Array.isArray(options.tokenKinds) ||
+      options.tokenKinds.length !== passage.length ||
+      !options.tokenKinds.every(kind => typeof kind === 'string' && /^[a-z]+$/.test(kind))) return false;
+  const indent = options.indent;
+  if (!['  ', '    ', '\t'].includes(indent)) return false;
+  return startLearningSession(passage, options.onComplete, {
+    tokenKinds: options.tokenKinds.slice(), indent, previous: '', selection: null,
+    onInput: typeof options.onInput === 'function' ? options.onInput : null,
+    insertingIndent: false
+  });
+}
+
+function insertCodeIndent() {
+  if (!codeSession || testState !== 'RUNNING' || !inputEl) return false;
+  const { value } = inputEl;
+  const start = inputEl.selectionStart, end = inputEl.selectionEnd;
+  if (!Number.isInteger(start) || !Number.isInteger(end) || start !== end) return false;
+  const lineStart = start === 0 ? 0 : value.lastIndexOf('\n', start - 1) + 1;
+  if (!/^[ \t]*$/.test(value.slice(lineStart, start)) ||
+      value.length + codeSession.indent.length > currentPassage.length) return false;
+  const indent = codeSession.indent;
+  const session = codeSession;
+  session.selection = { start, end };
+  session.insertingIndent = true;
+  try {
+    inputEl.value = value.slice(0, start) + indent + value.slice(end);
+    inputEl.setSelectionRange?.(start + indent.length, start + indent.length);
+    handleInput({ inputType: 'insertText', data: indent });
+  } finally { session.insertingIndent = false; }
+  return true;
+}
+
+function cancelCodeSession() {
+  return codeSession ? cancelLearningSession() : false;
 }
 
 function cancelLearningSession() {
@@ -1812,6 +1891,9 @@ if (isBrowser) {
   window.BrokenKeyTyping = Object.freeze({
     startLearningSession,
     cancelLearningSession,
+    startCodeSession,
+    cancelCodeSession,
+    insertCodeIndent,
     getMetrics: getLearningMetrics
   });
 }

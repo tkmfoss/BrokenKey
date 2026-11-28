@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Practice programming syntax with adaptive code typing drills.">
+  <title>Code Arena — BrokenKey</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="code-arena.css">
+</head>
+<body class="code-arena-page">
+  <main class="container arena-container">
+    <header class="topbar arena-topbar">
+      <div class="brand"><div><h1>Code Arena</h1><p class="eyebrow">TYPE / DEBUG / IMPROVE</p></div></div>
+      <div class="arena-actions"><a class="btn btn-secondary" href="index.html">Typing practice</a><button id="theme-btn" class="icon-btn" type="button">☼ <span>Light mode</span></button></div>
+    </header>
+    <p class="subtitle">Practice real code, punctuation and indentation. Exercises adapt to your language-specific typing weaknesses. Code is never executed.</p>
+    <section class="arena-card" aria-labelledby="arena-heading">
+      <h2 id="arena-heading">Choose your drill</h2>
+      <div class="arena-settings">
+        <label>Language<select id="arena-language"><option value="python">Python</option><option value="javascript">JavaScript</option><option value="c">C</option><option value="cpp">C++</option></select></label>
+        <label>Indentation<select id="arena-indent"><option value="4">4 spaces</option><option value="2">2 spaces</option><option value="tab">Tabs</option></select></label>
+        <div><span class="arena-label">Recommended drill</span><strong id="arena-exercise">—</strong><small id="arena-tier"></small></div>
+      </div>
+      <div class="arena-actions"><button id="arena-start" class="btn btn-primary" type="button">Start exercise</button><button id="arena-cancel" class="btn btn-secondary" type="button" disabled>Cancel / reset</button></div>
+      <p id="arena-status" role="status">Select a language to preview your next exercise.</p>
+      <div class="arena-stats" aria-label="Current typing metrics">
+        <div><span>TIME</span><strong id="time">UNTIMED</strong></div>
+        <div><span>WPM</span><strong id="wpm">0</strong></div>
+        <div><span>Current accuracy</span><strong id="accuracy">100%</strong></div>
+        <div><span>Current mistakes</span><strong id="mistakes">0</strong></div>
+      </div>
+      <div id="passage" class="passage arena-passage" aria-label="Code to type"></div>
+      <label class="arena-label" for="typing-input">Type the code exactly as shown</label>
+      <textarea id="typing-input" class="typing-input" rows="7" disabled spellcheck="false" autocorrect="off" autocapitalize="off" autocomplete="off" aria-describedby="arena-hint"></textarea>
+      <div class="arena-actions"><button id="arena-indent-btn" class="btn btn-secondary" type="button" disabled>Insert indent</button></div>
+      <p id="arena-hint">Use Enter and Backspace normally. Press Tab or use Insert indent to add one configured indentation unit at the beginning of a line. Shift+Tab moves focus out of the editor; Tab elsewhere moves focus normally. Paste and drag-and-drop are blocked. Correct every mismatch to finish.</p>
+    </section>
+    <section class="arena-card" aria-labelledby="arena-history-heading">
+      <h2 id="arena-history-heading">Language progress</h2>
+      <p>Completed code drills only. General typing records, Ghost Mode and Learn Mode are unchanged.</p>
+      <div class="arena-stats" id="arena-history"></div>
+      <h3>Construct weaknesses</h3>
+      <p id="arena-weakness"></p>
+      <ul id="arena-weak-list"></ul>
+      <h3>Latest completed drill</h3>
+      <p id="arena-latest">No completed exercises yet.</p>
+      <p id="arena-storage-status" role="status"></p>
+    </section>
+  </main>
+  <span id="best" class="sr-only">0</span><span id="status-label" class="sr-only">READY</span>
+  <button id="start-btn" class="sr-only" tabindex="-1" aria-hidden="true" type="button">Start</button>
+  <div id="result" class="sr-only hidden" role="status"></div>
+  <script src="script.js"></script>
+  <script type="module" src="code-arena.js"></script>
+</body>
+</html>
